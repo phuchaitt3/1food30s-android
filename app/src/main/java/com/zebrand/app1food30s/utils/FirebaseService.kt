@@ -128,14 +128,13 @@ object FirebaseService {
 //                                Log.i("TAG123", "getListProducts: ${value?.documents}")
                             CoroutineScope(Dispatchers.IO).launch {
                                 value?.documents?.map { document ->
-                                    val product = document.toObject<Product>()!!
-
-                                    product.image =
-                                        FirebaseUtils.fireStorage.reference.child(product.image).downloadUrl.await()
-                                            .toString()
-                                    db.productDao().insert(product)
-
-                                }
+                                    async { // Launch a concurrent coroutine for each document
+                                        val product = document.toObject<Product>()!!
+                                        // This network call now happens concurrently across all products
+                                        product.image = FirebaseUtils.fireStorage.reference.child(product.image).downloadUrl.await().toString()
+                                        db.productDao().insert(product)
+                                    }
+                                }?.awaitAll() // Suspend until all concurrent tasks complete
                                 products = db.productDao().getAll()
                                 deferred.complete(products)
                             }
